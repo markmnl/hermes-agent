@@ -37,6 +37,11 @@ status display, gateway setup, and more.
   `deliver=<name>` job fires correctly but the actual send returns
   `No live adapter for platform '<name>'`.  Pair with `cron_deliver_env_var`
   for end-to-end cron support.  See the docsite for the signature.
+- `parse_target_ref_fn: (str) -> Optional[tuple[str, Optional[str]]]`:
+  validate and normalize platform-native explicit targets used by
+  `send_message` and `hermes send`. Return `(chat_id, thread_id)` when the
+  target is recognized, or `None` to retain channel-directory and built-in
+  parsing fallback.
 - `plugin.yaml` `requires_env` / `optional_env` rich-dict entries —
   auto-populate `OPTIONAL_ENV_VARS` in `hermes_cli/config.py` so the setup
   wizard surfaces proper descriptions, prompts, password flags, and URLs.

@@ -191,12 +191,42 @@ When you call `ctx.register_platform()`, the following integration points are ha
 | Channel directory | Plugin platforms included in enumeration |
 | System prompt hints | `platform_hint` injected into LLM context |
 | Message chunking | `max_message_length` for smart splitting |
+| Explicit send targets | `parse_target_ref_fn` validates platform-native IDs |
 | PII redaction | `pii_safe` flag |
 | `hermes status` | Shows plugin platforms with `(plugin)` tag |
 | `hermes gateway setup` | Plugin platforms appear in setup menu |
 | `hermes tools` / `hermes skills` | Plugin platforms in per-platform config |
 | Token lock (multi-profile) | Use `acquire_scoped_lock()` in your `connect()` |
 | Orphaned config warning | Descriptive log when plugin is missing |
+
+## Platform-native explicit targets
+
+`send_message` and `hermes send` normally recognize built-in identifiers or
+resolve human-friendly names through the channel directory. Register
+`parse_target_ref_fn` when your platform uses another explicit identifier
+format:
+
+```python
+def parse_target_ref(target_ref: str) -> tuple[str, str | None] | None:
+    value = target_ref.strip()
+    if not value.startswith("room/"):
+        return None
+    return value, None
+
+
+ctx.register_platform(
+    name="my_platform",
+    ...,
+    parse_target_ref_fn=parse_target_ref,
+)
+```
+
+The synchronous callback receives the portion after `my_platform:`. Return a
+normalized `(chat_id, thread_id)` pair to mark it explicit; `thread_id` may be
+`None`. Return `None` to preserve built-in parsing and channel-directory
+fallback. Exceptions and invalid return values are logged and also fall back.
+Delivery still uses the live adapter or its registered `standalone_sender_fn`;
+the callback only parses the target.
 
 ## Env-Driven Auto-Configuration
 

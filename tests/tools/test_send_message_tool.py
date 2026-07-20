@@ -277,6 +277,110 @@ def _ensure_slack_mock(monkeypatch):
 
 
 class TestSendMessageTool:
+    def test_plugin_target_parser_bypasses_channel_directory(self):
+        from gateway.platform_registry import PlatformEntry, platform_registry
+
+        platform_name = "target-parser-test"
+        entry = PlatformEntry(
+            name=platform_name,
+            label="Target parser test",
+            adapter_factory=lambda cfg: None,
+            check_fn=lambda: True,
+            parse_target_ref_fn=lambda ref: (ref.strip().casefold(), "thread-7")
+            if ref.strip().startswith("@")
+            else None,
+        )
+        platform_registry.register(entry)
+        platform = Platform(platform_name)
+        pconfig = SimpleNamespace(enabled=True, token=None, extra={})
+        config = SimpleNamespace(
+            platforms={platform: pconfig},
+            get_home_channel=lambda _platform: None,
+        )
+        try:
+            with patch("gateway.config.load_gateway_config", return_value=config), \
+                 patch("tools.interrupt.is_interrupted", return_value=False), \
+                 patch(
+                     "gateway.channel_directory.resolve_channel_name",
+                     side_effect=AssertionError("explicit plugin target must not resolve"),
+                 ), \
+                 patch("model_tools._run_async", side_effect=_run_async_immediately), \
+                 patch(
+                     "tools.send_message_tool._send_to_platform",
+                     new=AsyncMock(return_value={"success": True}),
+                 ) as send_mock, \
+                 patch("gateway.mirror.mirror_to_session", return_value=True):
+                result = json.loads(
+                    send_message_tool(
+                        {
+                            "action": "send",
+                            "target": f"{platform_name}:@Alice@Example.com",
+                            "message": "hello",
+                        }
+                    )
+                )
+        finally:
+            platform_registry.unregister(platform_name)
+
+        assert result["success"] is True
+        send_mock.assert_awaited_once_with(
+            platform,
+            pconfig,
+            "@alice@example.com",
+            "hello",
+            thread_id="thread-7",
+            media_files=[],
+            force_document=False,
+        )
+
+    def test_plugin_target_parser_none_preserves_normal_fallback(self):
+        from gateway.platform_registry import PlatformEntry, platform_registry
+
+        platform_name = "target-parser-none-test"
+        entry = PlatformEntry(
+            name=platform_name,
+            label="Target parser fallback test",
+            adapter_factory=lambda cfg: None,
+            check_fn=lambda: True,
+            parse_target_ref_fn=lambda _ref: None,
+        )
+        platform_registry.register(entry)
+        try:
+            assert _parse_target_ref(platform_name, "friendly-name") == (
+                None,
+                None,
+                False,
+            )
+        finally:
+            platform_registry.unregister(platform_name)
+
+    def test_plugin_target_parser_failure_preserves_normal_fallback(self, caplog):
+        from gateway.platform_registry import PlatformEntry, platform_registry
+
+        platform_name = "target-parser-error-test"
+
+        def broken_parser(_ref):
+            raise ValueError("bad parser")
+
+        entry = PlatformEntry(
+            name=platform_name,
+            label="Broken target parser test",
+            adapter_factory=lambda cfg: None,
+            check_fn=lambda: True,
+            parse_target_ref_fn=broken_parser,
+        )
+        platform_registry.register(entry)
+        try:
+            assert _parse_target_ref(platform_name, "friendly-name") == (
+                None,
+                None,
+                False,
+            )
+        finally:
+            platform_registry.unregister(platform_name)
+
+        assert "target parser failed" in caplog.text
+
     def test_ntfy_topic_target_is_explicit(self):
         chat_id, thread_id, is_explicit = _parse_target_ref("ntfy", "alerts-channel")
 

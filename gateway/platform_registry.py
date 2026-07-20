@@ -110,6 +110,14 @@ class PlatformEntry:
     # Do not use markdown.").  Empty string = no hint.
     platform_hint: str = ""
 
+    # Optional parser for platform-native explicit send targets.  Receives the
+    # portion after ``<platform>:`` and returns ``(chat_id, thread_id)`` when
+    # recognized, or ``None`` to fall through to built-in parsing and the
+    # channel directory.
+    parse_target_ref_fn: Optional[
+        Callable[[str], Optional[tuple[str, Optional[str]]]]
+    ] = None
+
     # ── Env-driven auto-configuration ──
     # Optional: read env vars, return a dict of ``PlatformConfig.extra`` fields
     # to seed when the platform is auto-enabled.  Called during

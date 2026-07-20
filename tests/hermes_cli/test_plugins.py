@@ -2335,6 +2335,33 @@ class TestPluginContextProfileName:
         assert ctx.profile_name == "worker1"
 
 
+class TestPluginPlatformTargetParserRegistration:
+    def test_register_platform_forwards_target_parser(self):
+        from gateway.platform_registry import platform_registry
+
+        mgr = PluginManager()
+        manifest = PluginManifest(name="target-parser-plugin", source="user")
+        ctx = PluginContext(manifest, mgr)
+
+        def parse_target_ref(target_ref):
+            return (target_ref.strip(), None)
+
+        ctx.register_platform(
+            name="target-parser-platform",
+            label="Target parser platform",
+            adapter_factory=lambda cfg: None,
+            check_fn=lambda: True,
+            parse_target_ref_fn=parse_target_ref,
+        )
+        try:
+            entry = platform_registry.get("target-parser-platform")
+            assert entry is not None
+            assert entry.parse_target_ref_fn is parse_target_ref
+            assert entry.plugin_name == "target-parser-plugin"
+        finally:
+            platform_registry.unregister("target-parser-platform")
+
+
 class TestDispatchToolWithoutCliRef:
     """ctx.dispatch_tool works in worker/hook contexts (no _cli_ref).
 

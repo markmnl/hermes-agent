@@ -531,6 +531,35 @@ def _handle_send(args):
 
 def _parse_target_ref(platform_name: str, target_ref: str):
     """Parse a tool target into chat_id/thread_id and whether it is explicit."""
+    from gateway.platform_registry import platform_registry
+
+    entry = platform_registry.get(platform_name)
+    parser = entry.parse_target_ref_fn if entry is not None else None
+    if parser is not None:
+        try:
+            parsed = parser(target_ref)
+        except Exception as exc:
+            logger.warning(
+                "Platform '%s' target parser failed for %r: %s",
+                platform_name,
+                target_ref,
+                exc,
+            )
+        else:
+            if parsed is not None:
+                if (
+                    isinstance(parsed, tuple)
+                    and len(parsed) == 2
+                    and isinstance(parsed[0], str)
+                    and bool(parsed[0])
+                    and (parsed[1] is None or isinstance(parsed[1], str))
+                ):
+                    return parsed[0], parsed[1], True
+                logger.warning(
+                    "Platform '%s' target parser returned invalid result %r",
+                    platform_name,
+                    parsed,
+                )
     if platform_name == "telegram":
         match = _TELEGRAM_TOPIC_TARGET_RE.fullmatch(target_ref)
         if match:
